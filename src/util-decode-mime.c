@@ -80,7 +80,7 @@
 #define MAX_IP6_CHARS  39
 
 /* Globally hold configuration data */
-static MimeDecConfig mime_dec_config = { 1, 1, 1, 0, MAX_HEADER_VALUE };
+static MimeDecConfig mime_dec_config = { 1, 1, 1, NULL, 0, 0, MAX_HEADER_VALUE };
 
 /* Mime Parser String translation */
 static const char *StateFlags[] = { "NONE",
