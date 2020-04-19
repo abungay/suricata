@@ -70,7 +70,6 @@
 #define QP_STR            "quoted-printable"
 #define TXT_STR           "text/plain"
 #define HTML_STR          "text/html"
-#define URL_STR           "http://"
 
 /* Memory Usage Constants */
 #define STACK_FREE_NODES  10
