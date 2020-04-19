@@ -329,6 +329,9 @@ static void SMTPConfigure(void) {
             smtp_config.mime_config.extract_urls_schemes = seq_node;
         }
 
+        ret = ConfGetChildValueBool(config, "log-url-scheme", &val);
+        if (ret) {
+            smtp_config.mime_config.log_url_scheme = val;
         }
 
         ret = ConfGetChildValueBool(config, "body-md5", &val);
