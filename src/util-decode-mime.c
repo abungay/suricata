@@ -1027,85 +1027,111 @@ static int FindUrlStrings(const uint8_t *line, uint32_t len,
     uint8_t *fptr, *remptr, *tok = NULL, *tempUrl;
     uint32_t tokLen = 0, i, tempUrlLen;
     uint8_t urlStrLen = 0, flags = 0;
+    ConfNode *scheme = NULL;
+    char scheme_str[URL_SCHEME_SIZE + 4]; /* 60 chars for scheme name + '://' */
+    int r;
 
-    remptr = (uint8_t *)line;
-    do {
-        SCLogDebug("Looking for URL String starting with: %s", URL_STR);
+    if (mime_dec_config.extract_urls_schemes) {
+        TAILQ_FOREACH(scheme, &mime_dec_config.extract_urls_schemes->head, next) {
+            memset(scheme_str, 0x00, sizeof(scheme_str));
+            r = snprintf(scheme_str, sizeof(scheme_str), "%s://",  scheme->val);
+            if (r < 0 || r > (int)sizeof(scheme_str)) {
+                SCLogError(SC_ERR_FATAL, "snprintf failure.");
+                exit(EXIT_FAILURE);
+            }
+            urlStrLen = strlen(scheme_str);
 
-        /* Check for token definition */
-        fptr = FindBuffer(remptr, len - (remptr - line), (uint8_t *)URL_STR, strlen(URL_STR));
-        if (fptr != NULL) {
+            remptr = (uint8_t *)line;
+            do {
+                SCLogDebug("Looking for URL String starting with: %s", 
+                        scheme_str);
 
-            urlStrLen = strlen(URL_STR);
-            fptr += urlStrLen; /* Start at end of start string */
-            tok = GetToken(fptr, len - (fptr - line), " \"\'<>]\t", &remptr,
-                    &tokLen);
-            if (tok == fptr) {
-                SCLogDebug("Found url string");
+                /* Check for token definition */
+                fptr = FindBuffer(remptr, len - (remptr - line), 
+                        (uint8_t *)scheme_str, urlStrLen);
+                if (fptr != NULL) {
 
-                /* First copy to temp URL string */
-                tempUrl = SCMalloc(urlStrLen + tokLen);
-                if (unlikely(tempUrl == NULL)) {
-                    SCLogError(SC_ERR_MEM_ALLOC, "Memory allocation failed");
-                    return MIME_DEC_ERR_MEM;
-                }
-
-                PrintChars(SC_LOG_DEBUG, "RAW URL", tok, tokLen);
-
-                /* Copy over to temp URL while decoding */
-                tempUrlLen = 0;
-                for (i = 0; i < tokLen && tok[i] != 0; i++) {
-
-                    // URL decoding would probably go here
-
-                    /* url is all lowercase */
-                    tempUrl[tempUrlLen] = tolower(tok[i]);
-                    tempUrlLen++;
-                }
-
-                /* Determine if URL points to an EXE */
-                if (IsExeUrl(tempUrl, tempUrlLen)) {
-                    flags |= URL_IS_EXE;
-
-                    PrintChars(SC_LOG_DEBUG, "EXE URL", tempUrl, tempUrlLen);
-                } else {
-                    /* Not an EXE URL */
-                    /* Cut off length at first '/' */
-                    /* If seems that BAESystems had done the following
-                       in support of PEScan.  We don't want it for logging.
-                       Therefore its been removed.
-                    tok = FindString(tempUrl, tempUrlLen, "/");
-                    if (tok != NULL) {
-                        tempUrlLen = tok - tempUrl;
+                    if (!mime_dec_config.log_url_scheme) {
+                        fptr += urlStrLen; /* Start at end of start string */
                     }
-                    */
-                }
+                    tok = GetToken(fptr, len - (fptr - line), " \"\'<>]\t", 
+                            &remptr, &tokLen);
+                    if (tok == fptr) {
+                        SCLogDebug("Found url string");
 
-                /* Make sure remaining URL exists */
-                if (tempUrlLen > 0) {
-                    if (!(FindExistingUrl(entity, tempUrl, tempUrlLen))) {
-                        /* Now look for numeric IP */
-                        if (IsIpv4Host(tempUrl, tempUrlLen)) {
-                            flags |= URL_IS_IP4;
-
-                            PrintChars(SC_LOG_DEBUG, "IP URL4", tempUrl, tempUrlLen);
-                        } else if (IsIpv6Host(tempUrl, tempUrlLen)) {
-                            flags |= URL_IS_IP6;
-
-                            PrintChars(SC_LOG_DEBUG, "IP URL6", tempUrl, tempUrlLen);
+                        /* First copy to temp URL string */
+                        tempUrl = SCMalloc(tokLen);
+                        if (unlikely(tempUrl == NULL)) {
+                            SCLogError(SC_ERR_MEM_ALLOC,
+                                    "Memory allocation failed");
+                            return MIME_DEC_ERR_MEM;
                         }
 
-                        /* Add URL list item */
-                        MimeDecAddUrl(entity, tempUrl, tempUrlLen, flags);
-                    } else {
-                        SCFree(tempUrl);
+                        PrintChars(SC_LOG_DEBUG, "RAW URL", tok, tokLen);
+
+                        /* Copy over to temp URL while decoding */
+                        tempUrlLen = 0;
+                        for (i = 0; i < tokLen && tok[i] != 0; i++) {
+
+                            // URL decoding would probably go here
+
+                            /* url is all lowercase */
+                            tempUrl[tempUrlLen] = tolower(tok[i]);
+                            tempUrlLen++;
+                        }
+
+                        /* Determine if URL points to an EXE */
+                        if (IsExeUrl(tempUrl, tempUrlLen)) {
+                            flags |= URL_IS_EXE;
+
+                            PrintChars(SC_LOG_DEBUG, "EXE URL", tempUrl, 
+                                    tempUrlLen);
+                        } else {
+                            /* Not an EXE URL */
+                            /* Cut off length at first '/' */
+                            /* If seems that BAESystems had done the following
+                            in support of PEScan.  We don't want it for logging.
+                            Therefore its been removed.
+                            tok = FindString(tempUrl, tempUrlLen, "/");
+                            if (tok != NULL) {
+                                tempUrlLen = tok - tempUrl;
+                            }
+                            */
+                        }
+
+                        /* Make sure remaining URL exists */
+                        if (tempUrlLen > 0) {
+                            if (!(FindExistingUrl(entity, tempUrl, tempUrlLen))) {
+                                /* Now look for numeric IP */
+                                if (IsIpv4Host(tempUrl, tempUrlLen)) {
+                                    flags |= URL_IS_IP4;
+
+                                    PrintChars(SC_LOG_DEBUG, "IP URL4", tempUrl, 
+                                            tempUrlLen);
+                                } else if (IsIpv6Host(tempUrl, tempUrlLen)) {
+                                    flags |= URL_IS_IP6;
+
+                                    PrintChars(SC_LOG_DEBUG, "IP URL6", tempUrl, 
+                                            tempUrlLen);
+                                }
+
+                                /* Add URL list item */
+                                MimeDecAddUrl(entity, tempUrl, tempUrlLen, 
+                                        flags);
+                            } else {
+                                SCFree(tempUrl);
+                            }
+                        } else {
+                            SCFree(tempUrl);
+                        }
                     }
-                } else {
-                    SCFree(tempUrl);
                 }
-            }
+            } while (fptr != NULL);
         }
-    } while (fptr != NULL);
+    } else {
+        SCLogError(SC_ERR_FATAL, "MIME config extract_urls_schemes was NULL.");
+        exit(EXIT_FAILURE);
+    }
 
     return ret;
 }
