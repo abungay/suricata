@@ -309,6 +309,26 @@ static void SMTPConfigure(void) {
             }
 
             smtp_config.mime_config.extract_urls_schemes = extract_urls_schemes;
+        } else {
+            /* Add default extract url scheme 'http' since 
+             * extract-urls-schemes wasn't found in the config */
+            ConfNode *seq_node = ConfNodeNew();
+            ConfNode *scheme = ConfNodeNew();
+            if (unlikely(seq_node == NULL || scheme == NULL)) {
+                exit(EXIT_FAILURE);
+            }
+            seq_node->name = SCStrdup("extract-urls-schemes");
+            scheme->val = SCStrdup("http");
+            if (unlikely(seq_node->name == NULL || scheme->val == NULL)) {
+                exit(EXIT_FAILURE);
+            }
+            seq_node->is_seq = 1;
+            TAILQ_INSERT_TAIL(&seq_node->head, scheme, next);
+            TAILQ_INSERT_TAIL(&config->head, seq_node, next);
+
+            smtp_config.mime_config.extract_urls_schemes = seq_node;
+        }
+
         }
 
         ret = ConfGetChildValueBool(config, "body-md5", &val);
