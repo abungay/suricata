@@ -65,6 +65,7 @@
 /* Publicly exposed size constants */
 #define DATA_CHUNK_SIZE  3072  /* Should be divisible by 3 */
 #define LINEREM_SIZE      256
+#define URL_SCHEME_SIZE    60  /* Max URL scheme size from config */
 
 /* Mime Parser Constants */
 #define HEADER_READY    0x01

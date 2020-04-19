@@ -40,6 +40,7 @@
 
 #include "util-mpm.h"
 #include "util-debug.h"
+#include "util-decode-mime.h"
 #include "util-byte.h"
 #include "util-unittest.h"
 #include "util-unittest-helper.h"
@@ -257,6 +258,7 @@ static void SMTPConfigure(void) {
 
     ConfNode *config = ConfGetNode("app-layer.protocols.smtp.mime");
     if (config != NULL) {
+        ConfNode *extract_urls_schemes = NULL;
 
         ret = ConfGetChildValueBool(config, "decode-mime", &val);
         if (ret) {
@@ -281,6 +283,32 @@ static void SMTPConfigure(void) {
         ret = ConfGetChildValueBool(config, "extract-urls", &val);
         if (ret) {
             smtp_config.mime_config.extract_urls = val;
+        }
+
+        extract_urls_schemes = ConfNodeLookupChild(config,
+                "extract-urls-schemes");
+        if (extract_urls_schemes) {
+            ConfNode *next_tmp = NULL;
+            ConfNode *scheme = TAILQ_FIRST(&extract_urls_schemes->head);
+            while(scheme != TAILQ_END(&extract_urls_schemes->head)) {
+                /* Ensure scheme names in config are within scheme name
+                 * length limit */
+                if (strlen(scheme->val) > URL_SCHEME_SIZE) {
+                    SCLogError(SC_ERR_CONF_YAML_ERROR,
+                        "MIME extract-urls-schemes \"%s\" ignored: length > %d",
+                        scheme->val, URL_SCHEME_SIZE);
+                    next_tmp = TAILQ_NEXT(scheme, next);
+                    /* Remove bad scheme name so util-decode-mime doesn't
+                     * truncate it when searching for schemes in MIME body */
+                    TAILQ_REMOVE(&extract_urls_schemes->head, scheme, next);
+                    ConfNodeFree(scheme);
+                    scheme = next_tmp;
+                } else {
+                    scheme = TAILQ_NEXT(scheme, next);
+                }
+            }
+
+            smtp_config.mime_config.extract_urls_schemes = extract_urls_schemes;
         }
 
         ret = ConfGetChildValueBool(config, "body-md5", &val);
